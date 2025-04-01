@@ -1,0 +1,10 @@
+matplotlib
+requests
+librosa
+soundfile
+numpy
+soxr
+cython
+scipy
+pandas
+ipython

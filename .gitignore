@@ -1,0 +1,15 @@
+/__pycache__/
+/LocQ/
+binamix/__pycache__/
+examples/__pycache__/
+
+# Ignores contents of the output directory
+/output/*.csv
+/output/*.wav
+
+/ToDo.txt
+
+/sadie
+/musdb18
+
+audio/Macbeth_7_1_4.wav
