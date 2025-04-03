@@ -7,6 +7,9 @@ The library also provides functions to binaurally render multichannel surround e
 The library also includes helper functions for loading IR data, selecting file paths, extracting angles from filenames, checking angle availability and many others described below. You can use these functions to create your own custom pipelines.
 
 <br>
+The Binamix code is licensed under MIT license. Dependencies of the project are available under separate license terms.
+
+<br>
 
 # Setup
 - Install the required packages by running `pip install -r requirements.txt` 
