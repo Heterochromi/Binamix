@@ -755,4 +755,5 @@ if layout == '7.1':
 - **Pan**: The stereo panning position of the track, ranging from -1.0 (left) to 1.0 (right).
 
 see [TrackObject](#trackobject-class) class for details.
+.
 
