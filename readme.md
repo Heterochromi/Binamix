@@ -11,6 +11,24 @@ The Binamix code is licensed under MIT license. Dependencies of the project are 
 
 <br>
 
+## Citation
+You can read the paper here: [arXiv:2505.01369](https://arxiv.org/abs/2505.01369)
+
+```bibtex
+@misc{barry2025binamixpythonlibrary,
+      title={Binamix - A Python Library for Generating Binaural Audio Datasets}, 
+      author={Dan Barry and Davoud Shariat Panah and Alessandro Ragano and Jan Skoglund and Andrew Hines},
+      year={2025},
+      eprint={2505.01369},
+      journal={arXiv preprint arXiv:2505.01369},
+      archivePrefix={arXiv},
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2505.01369}, 
+}
+```
+
+
+
 # Setup
 - Install the required packages by running `pip install -r requirements.txt` 
 - Download and unzip the SADIE II Database by running `python -m binamix.sadie_db_setup`
