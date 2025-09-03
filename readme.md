@@ -1,3 +1,6 @@
+#This is not meant for maintenance i am simply trying this tool please go to the original repo.
+
+
 # Binamix - A Binaural Data Generation Library
 
 This library contains a set of pipeline tools for programmatic binaural mixing using the [SADIE II Database](https://www.york.ac.uk/sadie-project/database.html). The tools include functions for binaurally mixing and rendering sources for any given azimuth and elevation using weighted IR interpolation where needed. The library can also simulate channel encoded surround sound speaker layouts. When using a speaker layout for binaural rendering, the tools will use interpolation methods which simulate the VBAP method to render the source at the virtual speaker position. This allows you to create simulated surround mixes (binaurally rendered) for any given speaker layout.
