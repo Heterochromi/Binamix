@@ -1,4 +1,4 @@
-#This is not meant for maintenance i am simply trying this tool please go to the original repo.
+# This is not meant for maintenance i am simply trying this tool please go to the original repo.
 
 
 # Binamix - A Binaural Data Generation Library
