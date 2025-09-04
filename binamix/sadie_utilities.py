@@ -40,7 +40,7 @@ def select_sadie_wav_subject(subject_id, sample_rate, file_type):
     valid_subject_ids = ['D1', 'D2'] + [f'H{i}' for i in range(3, 21)]
     if subject_id not in valid_subject_ids:
         raise ValueError(f"Invalid subject_id: {subject_id} - Valid subject_ids are D1, D2, and H3 to H20")
-    
+
     sub_folder = "/" + subject_id + "/"
 
     if file_type == "HRIR":
@@ -51,7 +51,7 @@ def select_sadie_wav_subject(subject_id, sample_rate, file_type):
         elif sample_rate == 96000:
             return sadie_base_path + sub_folder + subject_id + hrir_wav_path_slug + wav_slug_96k
         else:
-            raise ValueError(f"Unsupported sample rate: {sample_rate} - Valid rates are 44100, 48000, 96000") 
+            raise ValueError(f"Unsupported sample rate: {sample_rate} - Valid rates are 44100, 48000, 96000")
     elif file_type == "BRIR":
         if sample_rate == 44100:
             return sadie_base_path + sub_folder + subject_id + brir_wav_path_slug + wav_slug_44k
@@ -70,7 +70,7 @@ def select_sadie_sofa_subject(subject_id, sample_rate, file_type):
     valid_subject_ids = ['D1', 'D2'] + [f'H{i}' for i in range(3, 21)]
     if subject_id not in valid_subject_ids:
         raise ValueError(f"Invalid subject_id: {subject_id} - Valid subject_ids are D1, D2, and H3 to H20")
-    
+
     sub_folder = subject_id + "/"
 
     if file_type == "HRIR":
@@ -81,7 +81,7 @@ def select_sadie_sofa_subject(subject_id, sample_rate, file_type):
         elif sample_rate == 96000:
             return sadie_base_path + sub_folder + subject_id + hrir_path_slug + subject_id + hrir_slug_96k
         else:
-            raise ValueError(f"Unsupported sample rate: {sample_rate} - Valid rates are 44100, 48000, 96000") 
+            raise ValueError(f"Unsupported sample rate: {sample_rate} - Valid rates are 44100, 48000, 96000")
     elif file_type == "BRIR":
         if sample_rate == 44100:
             return sadie_base_path + sub_folder + subject_id + brir_path_slug + subject_id + brir_slug_44k
@@ -109,13 +109,13 @@ def construct_wav_filename(azimuth, elevation):
 # Function to load the WAV HRIR/BRIR data for a given subject, sample rate, type, azimuth and elevation
 def load_sadie_ir(subject_id, sample_rate, ir_type, azimuth, elevation):
     # Load the HRIR/BRIR data for the specified subject, sample rate, type, azimuth and elevation
-    
-    # Select the correct file path based on the subject ID, sample rate and type 
+
+    # Select the correct file path based on the subject ID, sample rate and type
     wav_file_path = select_sadie_wav_subject(subject_id, sample_rate, ir_type)
 
     # Construct the filename for the WAV file based on the azimuth and elevation
     wav_filename = construct_wav_filename(azimuth, elevation)
-    
+
     # Combine the file path and filename to get the full file path
     filename = wav_file_path + wav_filename
 
@@ -149,14 +149,14 @@ def get_available_angles(subject_id, sample_rate, ir_type, speaker_layout):
     # error handling
     if ir_type not in ['HRIR', 'BRIR']:
         raise ValueError(f"Invalid IR type: {ir_type} - Valid types are HRIR and BRIR")
-    
+
     if sample_rate not in [44100, 48000, 96000]:
         raise ValueError(f"Invalid sample rate: {sample_rate} - Valid rates are 44100, 48000, 96000")
 
     if subject_id not in ['D1', 'D2'] + [f'H{i}' for i in range(3, 21)]:
         raise ValueError(f"Invalid subject ID: {subject_id} - Valid IDs are D1, D2, and H3 to H20")
-    
-    # Select the correct file path based on the subject ID, sample rate and type 
+
+    # Select the correct file path based on the subject ID, sample rate and type
     wav_file_path = select_sadie_wav_subject(subject_id, sample_rate, ir_type)
 
     # Get a list of all the WAV files in the directory
@@ -166,12 +166,12 @@ def get_available_angles(subject_id, sample_rate, ir_type, speaker_layout):
     angles = [extract_azimuth_elevation(file) for file in wav_files]
 
     # Filter the angles based on the speaker layout and return the filtered list
-    if speaker_layout in surround.supported_layouts():    
+    if speaker_layout in surround.supported_layouts():
         channels = surround.get_channel_angles(speaker_layout)
-        
+
         # remove the Lfe channel as it is not relevant for binaural rendering other than direct binarual renders of channel encoded surround
         channels = [channel for channel in channels if channel.name != 'Lfe']
-        
+
         angles = [(channel.azi, channel.ele) for channel in channels]
 
     elif speaker_layout == "none":
@@ -210,7 +210,7 @@ def get_nearest_elevation_angle(subject_id, sample_rate, ir_type, speaker_layout
     # If there is no elevation angle, return null
     if len(available_elevation_angles) == 0:
         return 'null', 'null'
-    
+
     # Calculate the difference between the specified azimuth and elevation and each available angle using cartesian coordinates
     differences = [get_angle_distance(azimuth, elevation, angle[0], angle[1]) for angle in available_elevation_angles]
 
@@ -271,15 +271,15 @@ def angle_exists(subject_id, sample_rate, ir_type, speaker_layout, azimuth, elev
 # Function to check if the speaker layout has elevation speakers
 def has_elevation_speakers(speaker_layout):
     # Check if the speaker layout has elevation speakers
-    
+
     # First check if the speaker layout is "none". This means we are using a full set of SADIE IRs
     if speaker_layout == "none":
-        return True      
-    
+        return True
+
     angles = surround.get_channel_angles(speaker_layout)
-    
+
     elevations = [angle.ele for angle in angles]
-    
+
     if any(elevation != 0 for elevation in elevations):
         return True
     else:
@@ -288,10 +288,10 @@ def has_elevation_speakers(speaker_layout):
 # Function to get azimuth neighbours on nearest plane
 def get_planar_neighbours(available_angles, azimuth, elevation, verbose=True):
     # Get the 'nearest plane' azimuth neighbours of a given angle.
-    
+
     # convert desired angle to range 0-360
     azimuth = (azimuth + 360) % 360
-   
+
     # put all unique elavation angles in a list
     elevation_angles = list(set([angle[1] for angle in available_angles]))
 
@@ -314,10 +314,10 @@ def get_planar_neighbours(available_angles, azimuth, elevation, verbose=True):
 
     # find index of smallest negative difference
     left_index = differences.index(max([diff for diff in differences if diff <= 0]))
-   
+
     # find index of smallest positive difference
     right_index = differences.index(min([diff for diff in differences if diff > 0]))
-    
+
     if azimuth <= 180:
         angle1 = available_angles[left_index]
         angle2 = available_angles[right_index]
@@ -337,7 +337,7 @@ def get_planar_neighbours(available_angles, azimuth, elevation, verbose=True):
         print("difference", differences)
         print(azimuth)
         print(three_angles)
-       
+
 
     return three_angles
 
@@ -345,17 +345,17 @@ def get_planar_neighbours(available_angles, azimuth, elevation, verbose=True):
 # Function to get max and min elevation from a speaker layout
 def get_elevation_range(available_angles):
     # Get the maximum and minimum elevation from a speaker layout
-    
+
     angles = available_angles
     elevations = [angle[1] for angle in angles]
     max_elevation = max(elevations)
     min_elevation = min(elevations)
-    
+
     return min_elevation, max_elevation
 
 # Function to generate an interpolated HRIR/BRIR for a given subject, sample rate, IR type, speaker layout, azimuth and elevation
 def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth, elevation, mode="auto", verbose=True):
-    
+
     if mode not in ["auto", "nearest", "planar", "two_point", "three_point"]:
         raise ValueError(f"Invalid mode: {mode} - Valid modes are 'auto', 'nearest', 'planar', 'two_point', 'three_point'")
 
@@ -374,7 +374,7 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
 
     # Convert minus angles to positive
     azimuth = (azimuth + 360) % 360
-    
+
     # Check if the speaker layout has elevation speakers - if not, set elevation to 0
     if not has_elevation_speakers(speaker_layout):
         azimuth = azimuth
@@ -393,11 +393,11 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         print(f"Using Nearest Angle: ({nearest_angle[0]}, {nearest_angle[1]})")
         ir = load_sadie_ir(subject_id, sample_rate, ir_type, nearest_angle[0], nearest_angle[1])
         return ir
-    
+
     if mode == "planar":
         # Use the nearest angle on the same elevation plane
         use_2_point_interp = True
-    
+
     if mode == "two_point":
         # Use 2 point interpolation
         use_2_point_interp = True
@@ -418,26 +418,26 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         ir = load_sadie_ir(subject_id, sample_rate, ir_type, nearest_angle[0], nearest_angle[1])
 
     else:
-        # If angle does not exist and there is no close proxy, 
+        # If angle does not exist and there is no close proxy,
         # generate an interpolated HRIR/BRIR using the nearest available angles based on the mode selected
-       
+
         if has_elevation_speakers(speaker_layout):
             # Get the 3 points surrounding the desired angle using modified delaunay triangulation
             three_points = delaunay_triangulation(available_angles, azimuth, elevation, speaker_layout, plots=False)
-        
+
         if not has_elevation_speakers(speaker_layout) or mode == "planar":
             # If there are no elevation speakers in the speaker layout, use 2 neighbouring angles on the 0 elevation plane.
             # *returns 3 angles for consistency with the later methods but only 2 are used
             three_points = get_planar_neighbours(available_angles, azimuth, elevation, verbose=False)
-                
-        # ----------------------------------------------------- 
+
+        # -----------------------------------------------------
         # Calculate the difference between the specified azimuth and elevation and each angle by converting each to cartesian first
 
         differences = [get_angle_distance(azimuth, elevation, angle[0], angle[1]) for angle in three_points]
 
         # Order the angles by difference - closest first
         nearest_indices = sorted(range(len(differences)), key=lambda i: differences[i])
-        
+
         angle1 = three_points[nearest_indices[0]]
         angle1_diff = differences[nearest_indices[0]]
         inv_angle1_diff = 1 / angle1_diff if angle1_diff != 0 else float('inf')
@@ -452,7 +452,7 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         angle3_diff = differences[nearest_indices[2]]
         inv_angle3_diff = 1 / angle3_diff if angle3_diff != 0 else float('inf')
         # print("Angle 3 ", angle3, "{:.3f}".format(angle3_diff))
-        
+
         # -----------------------------------------------------
 
         # convert to cartesian
@@ -461,18 +461,18 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         angle3_cart = spherical_to_cartesian(angle3[0], angle3[1])
 
         # -----------------------------------------------------
-        
+
         # Try all 2 point interpolation combinations cartesian
-       
+
         # Point 1 to Point 2
         sum_p1p2_inv_diffs = inv_angle1_diff + inv_angle2_diff
         w1_p1p2 = inv_angle1_diff / sum_p1p2_inv_diffs
         w2_p1p2 = inv_angle2_diff / sum_p1p2_inv_diffs
 
         angle_p1p2 = (w1_p1p2 * angle1_cart) + (w2_p1p2 * angle2_cart)
-        angle_p1p2 = cartesian_to_spherical(angle_p1p2[0], angle_p1p2[1], angle_p1p2[2]) 
+        angle_p1p2 = cartesian_to_spherical(angle_p1p2[0], angle_p1p2[1], angle_p1p2[2])
         angle_p1p2_diff = get_angle_distance(azimuth, elevation, angle_p1p2[0], angle_p1p2[1])
-        
+
         # Point 1 to Point 3
         sum_p1p3_inv_diffs = inv_angle1_diff + inv_angle3_diff
         w1_p1p3 = inv_angle1_diff / sum_p1p3_inv_diffs
@@ -509,8 +509,8 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         w1_3p = inv_angle1_diff / sum_3_inv_diffs
         w2_3p = inv_angle2_diff / sum_3_inv_diffs
         w3_3p = inv_angle3_diff / sum_3_inv_diffs
-       
-        w3_sum = (w1_3p * angle1_cart) + (w2_3p * angle2_cart) + (w3_3p * angle3_cart) 
+
+        w3_sum = (w1_3p * angle1_cart) + (w2_3p * angle2_cart) + (w3_3p * angle3_cart)
         interp_with_three = cartesian_to_spherical(w3_sum[0], w3_sum[1], w3_sum[2])
         angle_diff_3_point_interp = get_angle_distance(azimuth, elevation, interp_with_three[0], interp_with_three[1])
 
@@ -524,14 +524,14 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
             print("Nearest angle p2:" , angle2, "| Difference:", "{:.2f}".format(angle2_diff))
             print("Nearest angle p3:" , angle3, "| Difference:", "{:.2f}".format(angle3_diff))
 
-            
+
             print("\nChecking Angle Options...")
             print("Angle difference to nearest actual angle ->", "({:.2f}, {:.2f})".format(angle1[0], angle1[1]), "Difference | {:.3f}".format(angle1_diff))
             print("Interpolated Angle using 2pts [p1 & p2] ->", "({:.2f}, {:.2f})".format(angle_p1p2[0], angle_p1p2[1]), " Difference |", "{:.3f}".format(angle_p1p2_diff), "  Weights |", "{:.3f}".format(w1_p1p2), "{:.3f}".format(w2_p1p2))
             print("Interpolated Angle using 2pts [p1 & p3] ->", "({:.2f}, {:.2f})".format(angle_p1p3[0], angle_p1p3[1]), " Difference |","{:.3f}".format(angle_p1p3_diff), "  Weights |", "{:.3f}".format(w1_p1p3), "{:.3f}".format(w2_p1p3))
             print("Interpolated Angle using 3pts [p1 p2 p3] ->", "({:.2f},".format(interp_with_three[0]), "{:.2f})".format(interp_with_three[1]), " Difference |","{:.3f}".format(angle_diff_3_point_interp))
-           
-            
+
+
         print(f"\nDesired Angle: ({azimuth}, {elevation})")
 
         # -------------REMOVED AT TIME OF MODE ADDITION--Reconsider later----------------------
@@ -539,7 +539,7 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         # # Check if the desired point is on the same elevation plane as the nearest angles
         # # This assumes uniform sampling on that plane but not uniform sampling overall
         # if angle1[1] == angle2[1] == elevation:
-        #     use_2_point_interp = True   
+        #     use_2_point_interp = True
 
         # # Check if 2 point interpolation is better than or within a trade off difference of 3 point interpolation because 3 point interpolation colours the sound too much
         # trade_off = 0.06
@@ -547,10 +547,10 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
         #     print("3 point and 2 point interpolation are within trade off difference of", trade_off, "therefore")
         #     use_2_point_interp = True
         # -----------------------------------------------------
-        
+
         # With all above conditions met, decide which interpolation to use
         if (angle_diff_2_point_interp <= angle_diff_3_point_interp and not use_3_point_interp) or use_2_point_interp:
-                
+
             if np.abs(angle_diff_2_point_interp - angle1_diff) > 0.0005:
                 # If 2 point interpolation is better, or it is the user specified interpolation use 2 point
                 print("Using 2 Point Interpolation to achieve cartesian angle estimate: ({:.2f}, {:.2f})".format(interp_with_two[0], interp_with_two[1]))
@@ -560,12 +560,12 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
                 angle2_ir = load_sadie_ir(subject_id, sample_rate, ir_type, best_angle2[0], best_angle2[1])
 
                 ir = angle1_ir * w1_2p + angle2_ir * w2_2p
-            
+
             else:
                 # If 2 point interpolation is not better, use the nearest angle
                 print("Using Nearest Angle to achieve angle: ({:.2f}, {:.2f})".format(nearest_angle[0], nearest_angle[1]))
                 ir = load_sadie_ir(subject_id, sample_rate, ir_type, nearest_angle[0], nearest_angle[1])
-        
+
         elif (angle_diff_3_point_interp < angle_diff_2_point_interp) or use_3_point_interp:
             # If 3 point interpolation is better, or it is the user specified interpolation use 3 point
             print("Using 3 Point Interpolation to achieve cartesian angle estimate: ({:.2f}, {:.2f})".format(interp_with_three[0], interp_with_three[1]))
@@ -582,9 +582,9 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
             print("Something went wrong: ussing nearest angle to achieve angle: ({:.2f}, {:.2f})".format(nearest_angle[0], nearest_angle[1]))
             ir = load_sadie_ir(subject_id, sample_rate, ir_type, nearest_angle[0], nearest_angle[1])
 
-    
+
     print("-----------------------------------")
-    
+
 
     return ir
 
@@ -593,9 +593,9 @@ def generate_sadie_ir(subject_id, sample_rate, ir_type, speaker_layout, azimuth,
 
 # Function to calculate Delaunay triangulation for a given set of points on a 2D plane
 def delaunay_triangulation(available_angles, azimuth, elevation, speaker_layout, plots=True):
-    
+
     # Delaunay triangulation is normally used 2D and 3D triangulation in cartesian coordinates.
-    # This function considers the angles and elevations to be an equirectangular projection of the sphere 
+    # This function considers the angles and elevations to be an equirectangular projection of the sphere
     # which is valid to find the bounding triangle for the desired angle but not valid to calculate distances.
     # The distances are calculated elsewhere using cartesian conversion and euclidean distance.
 
@@ -608,15 +608,15 @@ def delaunay_triangulation(available_angles, azimuth, elevation, speaker_layout,
         if elevation > max_elevation:
             elevation = max_elevation
             print("Desired elevation is not possible with this speaker layout, setting elevation to :", elevation)
-    
+
     # Exit if max elvation is 0 indicating no elevation speakers. Delauneay triangulation is not needed
     if max_elevation == 0:
         raise ValueError("Speaker layout has no elevation speakers. Use an alternative method to find the nearest angle.")
-    
+
     # Convert desired angle to 0 - 360 range
     azimuth = (azimuth + 360) % 360
     elevation = (elevation + 360) % 360
-    
+
     # Keep a copy of all angles in unrotated form
     unrotated_angles = np.array(available_angles)
 
@@ -665,18 +665,18 @@ def delaunay_triangulation(available_angles, azimuth, elevation, speaker_layout,
     plot_points = points[vertices]
 
     print("")
-    
-    if plots:   
+
+    if plots:
         # Plot the triangulation and highlight the query point and the triangle
         plot.triplot(points[:, 0], points[:, 1], tri.simplices, color='blue')
         plot.plot(points[:, 0], points[:, 1], 'o', color='red')
         plot.plot(desired_point[:, 0], desired_point[:, 1], 'x', color='black', markersize=8, markeredgewidth=2)
-        
+
         # Highlight the triangle
         plot.fill(plot_points[0][:, 0], plot_points[0][:, 1], color='gray', alpha=0.4, label='Containing Triangle')
 
-        plot.title(f"Triangle Containing the Desired Angle ({azimuth}, {elevation}) for Layout = ({speaker_layout}) ", fontsize=8) 
-        
+        plot.title(f"Triangle Containing the Desired Angle ({azimuth}, {elevation}) for Layout = ({speaker_layout}) ", fontsize=8)
+
 
         plot.gca().invert_xaxis()
 
@@ -686,14 +686,14 @@ def delaunay_triangulation(available_angles, azimuth, elevation, speaker_layout,
 
         plot.xlabel("Azimuth")
         plot.ylabel("Elevation")
-        
+
         # plot.ylim(-90, 90)
         plot.show()
 
-    
+
     # Flatten the triangle points array
     triangle_points = [(float(coord[0]), float(coord[1])) for sublist in triangle_points for coord in sublist]
-    
+
     # convert azimuths to range 0 - 360
     triangle_points = [(angle[0] + 360, angle[1]) if angle[0] < 0 else angle for angle in triangle_points]
 
@@ -720,7 +720,7 @@ def pan_source(pan, input_file):
         raise ValueError("Pan value must be between -1 and 1")
 
     # Convert -1 to 1 range into 0 to 1 range
-    pan = (pan + 1) / 2 
+    pan = (pan + 1) / 2
 
     # Use constant power panning law
     gain_l = np.cos(pan * np.pi / 2)
@@ -746,7 +746,7 @@ def mix_tracks_binaural(tracks, subject_id, sample_rate, ir_type, speaker_layout
     track_lengths = [len(track.audio) for track in tracks]
     if not all(length == track_lengths[0] for length in track_lengths):
         raise ValueError("All tracks must have the same length")
-    
+
     # Check if all tracks have azimuth and elevation
     for track in tracks:
         if track.azimuth is None or track.elevation is None:
@@ -763,8 +763,8 @@ def mix_tracks_binaural(tracks, subject_id, sample_rate, ir_type, speaker_layout
         reverb_ir, sr = librosa.load(os.path.join(reverb_base_path, "meeting_room.wav"), sr=sample_rate, mono=True)
     else:
         raise ValueError("Invalid reverb type. Choose from 1, 2, 3, or 4")
-    
-     
+
+
 
     ir_length = len(reverb_ir)-1
 
@@ -774,30 +774,30 @@ def mix_tracks_binaural(tracks, subject_id, sample_rate, ir_type, speaker_layout
     for i, track in enumerate(tracks):
         print("Mixing ",track.name)
         if i == 0:
-            
+
             if track.reverb != 0:
                 print("Adding Reverb (",track.reverb,") to ",track.name)
                 reverb = np.convolve(track.audio, reverb_ir)
 
                 first_source = (reverb * track.reverb) + (np.pad(track.audio,(0, ir_length), 'constant') * (1-track.reverb))
             else:
-                first_source = np.pad(track.audio,(0, ir_length), 'constant')
-            
+                first_source = track.audio
+
             first_source = render_source(first_source, subject_id, sample_rate, ir_type, speaker_layout, track.azimuth, track.elevation, mode) * track.level
-            
+
             output = first_source
         else:
-            
+
             if track.reverb != 0:
                 print("Adding Reverb (",track.reverb,") to ",track.name)
                 reverb = np.convolve(track.audio, reverb_ir)
 
                 next_source = (reverb * track.reverb) + (np.pad(track.audio,(0, ir_length), 'constant') * (1-track.reverb))
             else:
-                next_source = np.pad(track.audio,(0, ir_length), 'constant')
-            
+                next_source = track.audio
+
             next_source = render_source(next_source, subject_id, sample_rate, ir_type, speaker_layout, track.azimuth, track.elevation, mode) * track.level
-            
+
             output += next_source
 
     return output
@@ -817,7 +817,7 @@ def mix_tracks_stereo(tracks, sample_rate, reverb_type='1'):
     track_lengths = [len(track.audio) for track in tracks]
     if not all(length == track_lengths[0] for length in track_lengths):
         raise ValueError("All tracks must have the same length")
-    
+
     # Check if all tracks have azimuth and elevation
     for track in tracks:
         if track.pan is None:
@@ -836,15 +836,15 @@ def mix_tracks_stereo(tracks, sample_rate, reverb_type='1'):
         reverb_ir, sr = librosa.load(os.path.join(reverb_base_path, "meeting_room.wav"), sr=sample_rate, mono=True)
     else:
         raise ValueError("Invalid reverb type. Choose from 1, 2, 3, or 4")
-    
-    
+
+
     ir_length = len(reverb_ir)-1
 
     # Render and sum the sources for each track
     for i, track in enumerate(tracks):
         print("Mixing ",track.name)
         if i == 0:
-            
+
             if track.reverb != 0:
                 print("Adding Reverb (",track.reverb,") to ",track.name)
                 reverb = np.convolve(track.audio, reverb_ir)
@@ -852,14 +852,14 @@ def mix_tracks_stereo(tracks, sample_rate, reverb_type='1'):
                 first_source = (reverb * track.reverb) + (np.pad(track.audio,(0, ir_length), 'constant') * (1-track.reverb))
             else:
                 first_source = np.pad(track.audio,(0, ir_length), 'constant')
-            
+
             first_source = pan_source(track.pan, first_source) * track.level
 
             print("Level", track.level, "Pan", track.pan)
-            
+
             output = first_source
         else:
-            
+
             if track.reverb != 0:
                 print("Adding Reverb (",track.reverb,") to ",track.name)
                 reverb = np.convolve(track.audio, reverb_ir)
@@ -867,7 +867,7 @@ def mix_tracks_stereo(tracks, sample_rate, reverb_type='1'):
                 next_source = (reverb * track.reverb) + (np.pad(track.audio,(0, ir_length), 'constant') * (1-track.reverb))
             else:
                 next_source = np.pad(track.audio,(0, ir_length), 'constant')
-            
+
             next_source = pan_source(track.pan, next_source) * track.level
 
             print("Level", track.level, "Pan", track.pan)
@@ -877,7 +877,7 @@ def mix_tracks_stereo(tracks, sample_rate, reverb_type='1'):
     return output
 
 def render_surround_to_binaural(surround_container, sr, subject_id, ir_type, input_layout, render_layout, mode="auto"):
-  
+
     # Get the channel angles for the speaker layout
     channel_spec = surround.get_channel_angles(input_layout)
 
@@ -888,7 +888,7 @@ def render_surround_to_binaural(surround_container, sr, subject_id, ir_type, inp
     channel_names = list(channel_index.keys())
 
     # Check that the number of channels in the audio file matches the number of channels in the speaker layout
-    if len(surround_container) != len(channel_spec):    
+    if len(surround_container) != len(channel_spec):
         raise ValueError(f"Number of channels in the input file ({len(surround_container)}) does not match the number of channels in the input speaker layout ({len(channel_spec)})")
     else:
         print("Multichannel Audio file has been loaded as a", input_layout, "file with the following channel mapping", channel_names)
@@ -912,7 +912,7 @@ def render_surround_to_binaural(surround_container, sr, subject_id, ir_type, inp
     # Mix the tracks
     output = mix_tracks_binaural(channels, subject_id, sr, ir_type, render_layout, mode, reverb_type="1")
 
-    
+
     return output, sr
 
 class TrackObject:
