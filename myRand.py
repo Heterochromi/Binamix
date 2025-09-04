@@ -1,9 +1,5 @@
 import numpy as np
 
-# Initialize a deterministic seed (kept same as original)
-np.random.seed(100)
-
-
 def seed(seed_value: int):
     """
     Reseed the numpy RNG used by this module.
