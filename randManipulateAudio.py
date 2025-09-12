@@ -20,8 +20,9 @@ def getRandomClip(directory : str , csv : str):
     df = pd.read_csv(csv)
     random_index = np.random.choice(df.index)
     audio_path = os.path.join(directory, df.loc[random_index, 'name'])
-    result = librosa.load(audio_path)
-    return result
+    class_name = df.loc[random_index, 'class']
+    audio , sr = librosa.load(audio_path)
+    return audio , sr ,class_name
 
 
 
@@ -54,7 +55,7 @@ def getRandomTimeWindow(audio, time : float , sr : int | float):
     end_pos = start_pos + target_len
     return audio[start_pos:end_pos]
 
-def RandomlyShiftAudioStartTime(audio, minShiftBy : float , maxShiftBy : float , total_time : float, sr : int | float):
+def randomlyShiftAudioStartTime(audio, minShiftBy : float , maxShiftBy : float , total_time : float, sr : int | float):
     """
     Randomly shift the start time of an audio clip
 
@@ -97,8 +98,8 @@ if __name__ == "__main__":
     import soundfile as sf
 
     for i in range(3):
-        audio , sr = getRandomClip("cs2 sounds/classifiables" , "cs2 sounds/classifiables.csv")
+        audio,sr,class_name = getRandomClip("cs2 sounds/classifiables" , "cs2 sounds/classifiables.csv")
         audio_random_window = getRandomTimeWindow(audio,0.04,sr)
-        shifted_audio = RandomlyShiftAudioStartTime(audio_random_window, 0.01, 0.035, 0.04, sr)
+        shifted_audio = randomlyShiftAudioStartTime(audio_random_window, 0.01, 0.035, 0.04, sr)
         sf.write(f"output_{i}_shifted.wav", shifted_audio, sr)
         sf.write(f"output_{i}.wav", audio_random_window, sr)
