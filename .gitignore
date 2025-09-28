@@ -6,7 +6,7 @@ examples/__pycache__/
 # Ignores contents of the output directory
 /output/*.csv
 /output/*.wav
-
+csv_output/
 /ToDo.txt
 
 /sadie

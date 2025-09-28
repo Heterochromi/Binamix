@@ -31,7 +31,7 @@ def get_random_ambient_audio(target_length_seconds=0.5, sr=44100):
     """Get random ambient audio or create silence if no ambient files available"""
     if create_ambient_csv_if_needed():
         try:
-            ambient_audio, ambient_sr, _ = getRandomClip("cs2 sounds/ambient", "cs2 sounds/ambient.csv")
+            ambient_audio, ambient_sr, _ = getRandomClip("cs2 sounds/ambient", "csv_output/ambient.csv")
             if ambient_sr != sr:
                 ambient_audio = librosa.resample(ambient_audio, orig_sr=ambient_sr, target_sr=sr)
             return getRandomTimeWindow(ambient_audio, target_length_seconds, sr)
@@ -66,12 +66,20 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
     classes = []
     azimuths = []
     elevations = []
+    csv_files = ["doors", "footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
 
     # Step 2: Generate clips with random positioning
     for i in range(num_clips):
         try:
             # Get random audio clip
-            audio, clip_sr, class_name = getRandomClip("cs2 sounds/classifiables", "cs2 sounds/classifiables.csv")
+            randClass = np.random.choice(csv_files)
+
+            if randClass in ("decoy", "flashbang", "smokegrenade", "hegrenade", "incgrenade", "molotov"):
+                wavDirectorypath = "cs2 sounds/grenade/" + randClass
+            else:
+                wavDirectorypath = "cs2 sounds/" + randClass
+
+            audio, clip_sr, class_name = getRandomClip(wavDirectorypath, "csv_output/" + randClass + ".csv")
 
             # Resample if necessary
             if clip_sr != sr:
@@ -90,7 +98,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
                 shifted_audio = randomlyShiftAudioStartTime(
                     windowed_audio,
                     minShiftBy=0.001,
-                    maxShiftBy=0.035,
+                    maxShiftBy=0.8,
                     total_time=window_time,
                     sr=sr
                 )
@@ -148,8 +156,8 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
 
     # Step 4: Add ambient background noise
     try:
-        # Generate random dB level for background noise (between -45 to -15 dB)
-        rmbs_db = -myRand.pick_random_from_range(15, 46)
+        # Generate random dB level for background noise (between -45 to -25 dB)
+        rmbs_db = -myRand.pick_random_from_range(25, 46)
 
         # Get ambient audio
         ambient_audio = get_random_ambient_audio(target_len, sr)
@@ -216,15 +224,24 @@ def create_augmented_dataset(dataset_size=50, output_dir="output/dataset"):
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    # Validate that we have source files
-    if not os.path.exists("cs2 sounds/classifiables.csv"):
-        print("Error: cs2 sounds/classifiables.csv not found!")
+    # Validate that we have CSV output directory and files
+    if not os.path.exists("csv_output"):
+        print("Error: csv_output directory not found! Run create_csv.py first.")
         return
 
-    df = pd.read_csv("cs2 sounds/classifiables.csv")
-    if len(df) == 0:
-        print("Error: No entries in classifiables.csv!")
+    # Check if at least some CSV files exist
+    csv_files = ["ambient", "decoy", "doors", "footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
+    existing_csvs = []
+    for csv_name in csv_files:
+        csv_path = f"csv_output/{csv_name}.csv"
+        if os.path.exists(csv_path):
+            existing_csvs.append(csv_name)
+
+    if not existing_csvs:
+        print("Error: No CSV files found in csv_output directory!")
         return
+
+    print(f"Found CSV files for: {', '.join(existing_csvs)}")
 
     # Initialize metadata list
     all_metadata = []
