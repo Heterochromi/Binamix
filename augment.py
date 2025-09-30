@@ -58,7 +58,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
     num_clips = np.random.randint(1, 5)
 
     # Audio parameters
-    window_time = 1 # 40ms window
+    window_time = 0.040 # 40ms window
     sr = 44100
     target_len = int(window_time * sr)
 
@@ -66,7 +66,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
     classes = []
     azimuths = []
     elevations = []
-    csv_files = ["doors", "footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
+    csv_files = ["doors", "footsteps","footsteps" "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
 
     # Step 2: Generate clips with random positioning
     for i in range(num_clips):
@@ -98,7 +98,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
                 shifted_audio = randomlyShiftAudioStartTime(
                     windowed_audio,
                     minShiftBy=0.001,
-                    maxShiftBy=0.8,
+                    maxShiftBy=0.035,
                     total_time=window_time,
                     sr=sr
                 )
@@ -114,8 +114,8 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
             azimuth = myRand.pick_random_from_range(0, 360)
             elevation = myRand.pick_random_from_range(-80, 81)
 
-            # Generate random audio level between 0.5 and 1.0
-            audio_level = np.random.uniform(0.5, 1.0)
+            # Generate random audio level between 0.7 and 1.0
+            audio_level = np.random.uniform(0.6, 1.0)
 
             # Create track object
             track = TrackObject(
@@ -286,7 +286,7 @@ def create_augmented_dataset(dataset_size=50, output_dir="output/dataset"):
 if __name__ == "__main__":
     # Set random seed for reproducibility (optional)
     # myRand.seed(42)
-    # np.random.seed(42)
+    np.random.seed(100)
 
     print("Setting up audio augmentation pipeline...")
 
@@ -294,4 +294,4 @@ if __name__ == "__main__":
     print("Setup complete. Starting dataset generation...")
 
     # Create dataset
-    create_augmented_dataset(dataset_size=50)
+    create_augmented_dataset(dataset_size=2500)

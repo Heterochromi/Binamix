@@ -1,13 +1,5 @@
 import numpy as np
 
-def seed(seed_value: int):
-    """
-    Reseed the numpy RNG used by this module.
-    Using this allows reproducible sequences in downstream code.
-    """
-    np.random.seed(seed_value)
-
-
 def pick_random_from_range(min_angle: int = 0, max_angle: int = 360) -> int:
     """
     Pick a random angle between min_angle (inclusive) and max_angle (exclusive in practice).
