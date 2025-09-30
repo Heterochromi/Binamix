@@ -1,301 +1,318 @@
-import numpy as np
 import os
+import numpy as np
 import pandas as pd
-import librosa
 import soundfile as sf
-from audiomentations import AddBackgroundNoise, PolarityInversion
+import librosa
+import multiprocessing as mp
+from functools import lru_cache
+from typing import Dict, List, Tuple
 from binamix.sadie_utilities import TrackObject, mix_tracks_binaural
 import myRand
-from randManipulateAudio import getRandomClip, getRandomTimeWindow, randomlyShiftAudioStartTime
+from randManipulateAudio import getRandomTimeWindow, randomlyShiftAudioStartTime
+
+# ---------------------------
+# Configuration
+# ---------------------------
+SR = 44100
+WINDOW_TIME = 1  # 40 ms
+TARGET_LEN_SAMPLES = int(WINDOW_TIME * SR)
+MAX_CLIPS_PER_SAMPLE = 4
+
+# Classes (fixed & cleaned)
+CLASS_CSV_MAP = {
+    "doors": ("cs2 sounds/doors", "csv_output/doors.csv"),
+    "footsteps": ("cs2 sounds/footsteps", "csv_output/footsteps.csv"),
+    "flashbang": ("cs2 sounds/grenade/flashbang", "csv_output/flashbang.csv"),
+    "hegrenade": ("cs2 sounds/grenade/hegrenade", "csv_output/hegrenade.csv"),
+    "incgrenade": ("cs2 sounds/grenade/incgrenade", "csv_output/incgrenade.csv"),
+    "molotov": ("cs2 sounds/grenade/molotov", "csv_output/molotov.csv"),
+    "smokegrenade": ("cs2 sounds/grenade/smokegrenade", "csv_output/smokegrenade.csv"),
+    "weapons": ("cs2 sounds/weapons", "csv_output/weapons.csv"),
+}
+
+AMBIENT_DIR = "cs2 sounds/ambient"
+AMBIENT_CSV = "csv_output/ambient.csv"
 
 
-
-def create_ambient_csv_if_needed():
-    """Create CSV for ambient sounds if it doesn't exist"""
-    ambient_dir = "cs2 sounds/ambient"
-    ambient_csv = "cs2 sounds/ambient.csv"
-
-    if not os.path.exists(ambient_csv) and os.path.exists(ambient_dir):
-        ambient_files = [f for f in os.listdir(ambient_dir) if f.endswith('.wav')]
-        if ambient_files:
-            df = pd.DataFrame({
-                'name': ambient_files,
-                'class': ['ambient'] * len(ambient_files)
-            })
-            df.to_csv(ambient_csv, index=False)
-            return True
-    return os.path.exists(ambient_csv)
+# ---------------------------
+# CSV / metadata caching
+# ---------------------------
+@lru_cache(maxsize=None)
+def load_csv(csv_path: str) -> pd.DataFrame:
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+    return pd.read_csv(csv_path)
 
 
-def get_random_ambient_audio(target_length_seconds=0.5, sr=44100):
-    """Get random ambient audio or create silence if no ambient files available"""
-    if create_ambient_csv_if_needed():
-        try:
-            ambient_audio, ambient_sr, _ = getRandomClip("cs2 sounds/ambient", "csv_output/ambient.csv")
-            if ambient_sr != sr:
-                ambient_audio = librosa.resample(ambient_audio, orig_sr=ambient_sr, target_sr=sr)
-            return getRandomTimeWindow(ambient_audio, target_length_seconds, sr)
-        except:
-            pass
+def get_random_clip_from_class(class_key: str) -> Tuple[np.ndarray, int, str]:
+    """
+    Returns (audio, sr, class_name)
+    """
+    directory, csv_path = CLASS_CSV_MAP[class_key]
+    df = load_csv(csv_path)
+    row = df.sample(1).iloc[0]
+    audio_path = os.path.join(directory, row["name"])
+    # Fast load
+    audio, sr = sf.read(audio_path, always_2d=False)
+    if audio.ndim > 1:
+        # Mix to mono if stereo
+        audio = np.mean(audio, axis=1)
+    if sr != SR:
+        # Faster resample option via librosa with kaiser_fast
+        audio = librosa.resample(
+            audio, orig_sr=sr, target_sr=SR, res_type="kaiser_fast"
+        )
+        sr = SR
+    return audio, sr, row["class"]
 
-    # Return silence if no ambient files available
-    return np.zeros(int(target_length_seconds * sr))
+
+# ---------------------------
+# Ambient handling
+# ---------------------------
+def ensure_ambient_csv():
+    if not os.path.exists(AMBIENT_CSV):
+        if os.path.isdir(AMBIENT_DIR):
+            ambient_files = [
+                f for f in os.listdir(AMBIENT_DIR) if f.lower().endswith(".wav")
+            ]
+            if ambient_files:
+                os.makedirs(os.path.dirname(AMBIENT_CSV), exist_ok=True)
+                pd.DataFrame(
+                    {"name": ambient_files, "class": ["ambient"] * len(ambient_files)}
+                ).to_csv(AMBIENT_CSV, index=False)
 
 
-def ensure_target_length(audio, target_len):
-    """Ensure audio is exactly target_len samples"""
-    if len(audio) > target_len:
-        return audio[:target_len]
-    if len(audio) < target_len:
-        return np.pad(audio, (0, target_len - len(audio)))
+@lru_cache(maxsize=1)
+def list_ambient_files() -> List[str]:
+    ensure_ambient_csv()
+    if not os.path.exists(AMBIENT_CSV):
+        return []
+    df = pd.read_csv(AMBIENT_CSV)
+    return [
+        os.path.join(AMBIENT_DIR, n)
+        for n in df["name"]
+        if os.path.exists(os.path.join(AMBIENT_DIR, n))
+    ]
+
+
+def get_random_ambient_window(
+    window_time: float = WINDOW_TIME, sr: int = SR
+) -> np.ndarray:
+    files = list_ambient_files()
+    if not files:
+        return np.zeros(int(window_time * sr), dtype=np.float32)
+    path = np.random.choice(files)
+    audio, file_sr = sf.read(path, always_2d=False)
+    if audio.ndim > 1:
+        audio = np.mean(audio, axis=1)
+    if file_sr != sr:
+        audio = librosa.resample(
+            audio, orig_sr=file_sr, target_sr=sr, res_type="kaiser_fast"
+        )
+    window = getRandomTimeWindow(audio, window_time, sr)
+    if len(window) < int(window_time * sr):
+        window = np.pad(window, (0, int(window_time * sr) - len(window)))
+    return window.astype(np.float32)
+
+
+# ---------------------------
+# Utility
+# ---------------------------
+def ensure_length_exact(audio: np.ndarray, target: int) -> np.ndarray:
+    if len(audio) > target:
+        return audio[:target]
+    elif len(audio) < target:
+        return np.pad(audio, (0, target - len(audio)))
     return audio
 
 
-def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
-    """Generate a single augmented audio sample with metadata"""
+def apply_random_start_shift(window_audio: np.ndarray, is_first: bool) -> np.ndarray:
+    if is_first:
+        return ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
+    shifted = randomlyShiftAudioStartTime(
+        window_audio, minShiftBy=0.001, maxShiftBy=0.8, total_time=WINDOW_TIME, sr=SR
+    )
+    return ensure_length_exact(shifted, TARGET_LEN_SAMPLES)
 
-    # Step 1: Randomly decide how many clips (1-4)
-    num_clips = np.random.randint(1, 5)
 
-    # Audio parameters
-    window_time = 0.040 # 40ms window
-    sr = 44100
-    target_len = int(window_time * sr)
+def scale_to_rms_db(x: np.ndarray, target_db: float) -> np.ndarray:
+    # target_db is negative (e.g., -30)
+    rms = np.sqrt(np.mean(x**2)) + 1e-12
+    target_rms = 10.0 ** (target_db / 20.0)
+    return x * (target_rms / rms)
+
+
+def _match_length(arr: np.ndarray, target_len: int) -> np.ndarray:
+    if len(arr) == target_len:
+        return arr
+    if len(arr) > target_len:
+        return arr[:target_len]
+    return np.pad(arr, (0, target_len - len(arr)))
+
+
+# ---------------------------
+# Core single-sample generation
+# ---------------------------
+def generate_single(sample_id: int, output_dir: str) -> Dict:
+    num_clips = np.random.randint(1, MAX_CLIPS_PER_SAMPLE + 1)
+    class_keys = list(CLASS_CSV_MAP.keys())
 
     tracks = []
-    classes = []
-    azimuths = []
-    elevations = []
-    csv_files = ["doors", "footsteps","footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
+    class_list = []
+    az_list = []
+    el_list = []
 
-    # Step 2: Generate clips with random positioning
-    for i in range(num_clips):
+    for idx in range(num_clips):
         try:
-            # Get random audio clip
-            randClass = np.random.choice(csv_files)
+            class_key = np.random.choice(class_keys)
+            audio, sr, class_name = get_random_clip_from_class(class_key)
 
-            if randClass in ("decoy", "flashbang", "smokegrenade", "hegrenade", "incgrenade", "molotov"):
-                wavDirectorypath = "cs2 sounds/grenade/" + randClass
-            else:
-                wavDirectorypath = "cs2 sounds/" + randClass
+            # Extract 40ms window
+            window_audio = getRandomTimeWindow(audio, WINDOW_TIME, SR)
+            window_audio = ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
+            shifted_audio = apply_random_start_shift(window_audio, is_first=(idx == 0))
 
-            audio, clip_sr, class_name = getRandomClip(wavDirectorypath, "csv_output/" + randClass + ".csv")
-
-            # Resample if necessary
-            if clip_sr != sr:
-                audio = librosa.resample(audio, orig_sr=clip_sr, target_sr=sr)
-
-            # Extract random window of 40ms
-            windowed_audio = getRandomTimeWindow(audio, window_time, sr)
-
-            # For the first clip (i==0), don't shift - let it play the entire time
-            # For subsequent clips, randomly shift start time
-            if i == 0:
-                # First clip: no shifting, ensure it plays for the full duration
-                shifted_audio = windowed_audio
-            else:
-                # Other clips: randomly shift start time (shift between 1ms to 35ms within the 40ms window)
-                shifted_audio = randomlyShiftAudioStartTime(
-                    windowed_audio,
-                    minShiftBy=0.001,
-                    maxShiftBy=0.035,
-                    total_time=window_time,
-                    sr=sr
-                )
-
-            # Ensure consistent length
-            shifted_audio = ensure_target_length(shifted_audio, int(window_time * sr))
-
-            # Pad to total length (0.5s) with the shifted audio at the beginning
-            final_audio = np.zeros(target_len)
-            final_audio[:len(shifted_audio)] = shifted_audio
-
-            # Generate random azimuth and elevation
             azimuth = myRand.pick_random_from_range(0, 360)
             elevation = myRand.pick_random_from_range(-80, 81)
+            level = np.random.uniform(0.6, 1.0)
 
-            # Generate random audio level between 0.7 and 1.0
-            audio_level = np.random.uniform(0.6, 1.0)
-
-            # Create track object
             track = TrackObject(
-                name=f"source_{i}",
+                name=f"source_{idx}",
                 azimuth=azimuth,
                 elevation=elevation,
-                level=audio_level,
+                level=level,
                 reverb=0,
-                audio=final_audio,
+                audio=shifted_audio,
             )
-
             tracks.append(track)
-            classes.append(class_name)
-            azimuths.append(azimuth)
-            elevations.append(elevation)
-
+            class_list.append(class_name)
+            az_list.append(azimuth)
+            el_list.append(elevation)
         except Exception as e:
-            print(f"[ERROR] Clip {i} failed. Class choice might be invalid or file missing.")
-            print(f"  Chosen class: {randClass}")
-            print(f"  Expected CSV: csv_output/{randClass}.csv")
-            print(f"  WAV directory: {wavDirectorypath}")
-            print(f"  Exception: {e}")
+            print(f"[Worker] Error clip {idx} sample {sample_id}: {e}")
             continue
 
     if not tracks:
-        print(f"No valid tracks generated for sample {sample_id}")
-        return None
+        return {}
 
-    # Step 3: Mix tracks using binaural processing
     try:
-        binaural_output = mix_tracks_binaural(
+        binaural = mix_tracks_binaural(
             tracks=tracks,
-            subject_id='D1',
-            sample_rate=sr,
-            ir_type='HRIR',
-            speaker_layout='none',
+            subject_id="D1",
+            sample_rate=SR,
+            ir_type="HRIR",
+            speaker_layout="none",
             mode="auto",
-        )
+        )  # shape (2, N)
     except Exception as e:
-        print(f"Error in binaural mixing for sample {sample_id}: {e}")
-        return None
+        print(f"[Worker] Binaural mix error sample {sample_id}: {e}")
+        return {}
 
-    # Step 4: Add ambient background noise
+    # Ambient addition (direct)
     try:
-        # Generate random dB level for background noise (between -45 to -25 dB)
-        rmbs_db = -myRand.pick_random_from_range(25, 46)
-
-        # Get ambient audio
-        ambient_audio = get_random_ambient_audio(window_time, sr)
-
-        if np.any(ambient_audio):  # If we have actual ambient audio (not just silence)
-            # Apply background noise to both channels
-            left_channel = binaural_output[0, :]
-            right_channel = binaural_output[1, :]
-
-            # Create temporary ambient file for audiomentations
-            temp_ambient_file = "temp_ambient.wav"
-            sf.write(temp_ambient_file, ambient_audio, sr)
-
-            transform = AddBackgroundNoise(
-                sounds_path=temp_ambient_file,
-                noise_rms="absolute",
-                min_absolute_rms_db=rmbs_db,
-                max_absolute_rms_db=rmbs_db,
-                noise_transform=PolarityInversion(),
-                p=1.0
-            )
-
-            left_augmented = transform(samples=left_channel, sample_rate=sr)
-            right_augmented = transform(samples=right_channel, sample_rate=sr)
-
-            final_output = np.vstack([left_augmented, right_augmented])
-
-            # Clean up temporary file
-            if os.path.exists(temp_ambient_file):
-                os.remove(temp_ambient_file)
-        else:
-            # No ambient audio available, use original binaural output
-            final_output = binaural_output
-
+        b_len = binaural.shape[1]
+        # Generate ambient window matching binaural duration
+        ambient = get_random_ambient_window(window_time=b_len / SR, sr=SR)
+        ambient = _match_length(ambient, b_len).astype(np.float32)
+        if np.any(ambient):
+            noise_db = -myRand.pick_random_from_range(25, 46)  # -25..-45
+            ambient = scale_to_rms_db(ambient, noise_db)
+            # Add (broadcast manually)
+            binaural[0, :] += ambient
+            binaural[1, :] += ambient
     except Exception as e:
-        print(f"Error adding background noise for sample {sample_id}: {e}")
-        final_output = binaural_output
+        print(f"[Worker] Ambient add error sample {sample_id}: {e}")
 
-    # Step 5: Save audio file
-    filename = f"sample_{sample_id:04d}.wav"
-    filepath = os.path.join(output_dir, filename)
-
+    # Save file
+    fname = f"sample_{sample_id:04d}.wav"
+    fpath = os.path.join(output_dir, fname)
     try:
-        sf.write(filepath, final_output.T, sr)
+        sf.write(fpath, binaural.T, SR)
     except Exception as e:
-        print(f"Error saving file {filepath}: {e}")
-        return None
+        print(f"[Worker] Write error {fpath}: {e}")
+        return {}
 
-    # Step 6: Return metadata
-    metadata = {
-        'name_file': filename,
-        'classes': ','.join(classes),
-        'azimuth': ','.join(map(str, azimuths)),
-        'elevation': ','.join(map(str, elevations)),
-        'num_classes': len(classes)
+    return {
+        "name_file": fname,
+        "classes": ",".join(class_list),
+        "azimuth": ",".join(map(str, az_list)),
+        "elevation": ",".join(map(str, el_list)),
+        "num_classes": len(class_list),
     }
 
-    return metadata
+
+# ---------------------------
+# Multiprocessing wrapper
+# ---------------------------
+def _init_worker(seed_base: int):
+    # Reseed RNG per process for full randomness
+    np.random.seed(seed_base + os.getpid())
 
 
-def create_augmented_dataset(dataset_size=50, output_dir="output/dataset"):
-    """Create a complete augmented dataset with CSV metadata"""
-
-    # Ensure output directory exists
+def create_dataset(
+    dataset_size: int = 1000,
+    output_dir: str = "output/dataset_parallel",
+    parallel: bool = True,
+    processes: int = None,
+    chunk_size: int = 50,
+):
     os.makedirs(output_dir, exist_ok=True)
 
-    # Validate that we have CSV output directory and files
-    if not os.path.exists("csv_output"):
-        print("Error: csv_output directory not found! Run create_csv.py first.")
-        return
+    # Validate CSVs exist
+    missing = [k for k, (d, c) in CLASS_CSV_MAP.items() if not os.path.exists(c)]
+    if missing:
+        print(f"Warning: Missing CSVs for: {missing}. They will never appear.")
+    ensure_ambient_csv()
 
-    # Check if at least some CSV files exist
-    csv_files = ["ambient", "decoy", "doors", "footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
-    existing_csvs = []
-    for csv_name in csv_files:
-        csv_path = f"csv_output/{csv_name}.csv"
-        if os.path.exists(csv_path):
-            existing_csvs.append(csv_name)
+    indices = list(range(dataset_size))
+    metadata_records = []
 
-    if not existing_csvs:
-        print("Error: No CSV files found in csv_output directory!")
-        return
+    if parallel:
+        if processes is None:
+            processes = max(1, mp.cpu_count() - 1)
+        print(f"Starting multiprocessing with {processes} processes...")
 
-    print(f"Found CSV files for: {', '.join(existing_csvs)}")
+        from functools import partial
 
-    # Initialize metadata list
-    all_metadata = []
+        worker_fn = partial(generate_single, output_dir=output_dir)
 
-    print(f"Generating {dataset_size} augmented audio samples...")
+        with mp.Pool(
+            processes=processes,
+            initializer=_init_worker,
+            initargs=(np.random.randint(0, 10_000_000),),
+        ) as pool:
+            for md in pool.imap_unordered(worker_fn, indices, chunksize=chunk_size):
+                if md:
+                    metadata_records.append(md)
+                    # Optional progress logging
+                    if len(metadata_records) % 100 == 0:
+                        print(
+                            f"Progress: {len(metadata_records)}/{dataset_size} samples done"
+                        )
+    else:
+        for sid in indices:
+            md = generate_single(sid, output_dir)
+            if md:
+                metadata_records.append(md)
+            if (sid + 1) % 100 == 0:
+                print(f"Progress: {sid + 1}/{dataset_size}")
 
-    for i in range(dataset_size):
-        print(f"Processing sample {i+1}/{dataset_size}")
-
-        metadata = generate_single_augmented_sample(i, output_dir)
-
-        if metadata:
-            all_metadata.append(metadata)
-        else:
-            print(f"Failed to generate sample {i}")
-
-    # Create CSV file with all metadata
-    if all_metadata:
-        df = pd.DataFrame(all_metadata)
+    if metadata_records:
+        df = pd.DataFrame(metadata_records)
         csv_path = os.path.join(output_dir, "dataset_metadata.csv")
         df.to_csv(csv_path, index=False)
-
-        print(f"Dataset creation complete!")
-        print(f"Generated {len(all_metadata)} audio files")
-        print(f"Metadata saved to: {csv_path}")
-        print(f"Audio files saved to: {output_dir}")
-
-        # Print some statistics
-        print("\nDataset Statistics:")
-        print(f"Average number of classes per sample: {df['num_classes'].mean():.2f}")
-        print(f"Class distribution:")
-        all_classes = []
-        for classes_str in df['classes']:
-            all_classes.extend(classes_str.split(','))
-        class_counts = pd.Series(all_classes).value_counts()
-        print(class_counts.to_string())
-
+        print(f"Done. {len(df)} samples written. Metadata at {csv_path}")
+        print(f"Avg classes per sample: {df['num_classes'].mean():.2f}")
     else:
-        print("No samples were successfully generated!")
+        print("No samples generated successfully.")
 
 
 if __name__ == "__main__":
-    # Set random seed for reproducibility (optional)
-    # myRand.seed(42)
-    np.random.seed(100)
-
-    print("Setting up audio augmentation pipeline...")
-
-
-    print("Setup complete. Starting dataset generation...")
-
-    # Create dataset
-    create_augmented_dataset(dataset_size=600000)
+    np.random.seed(1234)
+    create_dataset(
+        dataset_size=100,
+        output_dir="output/dataset_parallel",
+        parallel=True,
+        processes=None,
+        chunk_size=64,
+    )
