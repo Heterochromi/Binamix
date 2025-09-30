@@ -66,7 +66,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
     classes = []
     azimuths = []
     elevations = []
-    csv_files = ["doors", "footsteps","footsteps" "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
+    csv_files = ["doors", "footsteps","footsteps", "flashbang", "hegrenade", "incgrenade", "molotov", "smokegrenade", "weapons"]
 
     # Step 2: Generate clips with random positioning
     for i in range(num_clips):
@@ -133,7 +133,11 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
             elevations.append(elevation)
 
         except Exception as e:
-            print(f"Error processing clip {i}: {e}")
+            print(f"[ERROR] Clip {i} failed. Class choice might be invalid or file missing.")
+            print(f"  Chosen class: {randClass}")
+            print(f"  Expected CSV: csv_output/{randClass}.csv")
+            print(f"  WAV directory: {wavDirectorypath}")
+            print(f"  Exception: {e}")
             continue
 
     if not tracks:
@@ -160,7 +164,7 @@ def generate_single_augmented_sample(sample_id, output_dir="output/dataset"):
         rmbs_db = -myRand.pick_random_from_range(25, 46)
 
         # Get ambient audio
-        ambient_audio = get_random_ambient_audio(target_len, sr)
+        ambient_audio = get_random_ambient_audio(window_time, sr)
 
         if np.any(ambient_audio):  # If we have actual ambient audio (not just silence)
             # Apply background noise to both channels
@@ -294,4 +298,4 @@ if __name__ == "__main__":
     print("Setup complete. Starting dataset generation...")
 
     # Create dataset
-    create_augmented_dataset(dataset_size=2500)
+    create_augmented_dataset(dataset_size=600000)
