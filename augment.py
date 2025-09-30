@@ -14,7 +14,7 @@ from randManipulateAudio import getRandomTimeWindow, randomlyShiftAudioStartTime
 # Configuration
 # ---------------------------
 SR = 44100
-WINDOW_TIME = 1  # 40 ms
+WINDOW_TIME = 0.04
 TARGET_LEN_SAMPLES = int(WINDOW_TIME * SR)
 MAX_CLIPS_PER_SAMPLE = 4
 
@@ -130,7 +130,7 @@ def apply_random_start_shift(window_audio: np.ndarray, is_first: bool) -> np.nda
     if is_first:
         return ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
     shifted = randomlyShiftAudioStartTime(
-        window_audio, minShiftBy=0.001, maxShiftBy=0.8, total_time=WINDOW_TIME, sr=SR
+        window_audio, minShiftBy=0.001, maxShiftBy=0.035, total_time=WINDOW_TIME, sr=SR
     )
     return ensure_length_exact(shifted, TARGET_LEN_SAMPLES)
 
@@ -139,6 +139,8 @@ def scale_to_rms_db(x: np.ndarray, target_db: float) -> np.ndarray:
     # target_db is negative (e.g., -30)
     rms = np.sqrt(np.mean(x**2)) + 1e-12
     target_rms = 10.0 ** (target_db / 20.0)
+    if rms < 1e-10:
+        return x
     return x * (target_rms / rms)
 
 
@@ -167,7 +169,7 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
             class_key = np.random.choice(class_keys)
             audio, sr, class_name = get_random_clip_from_class(class_key)
 
-            # Extract 40ms window
+            # Extract window
             window_audio = getRandomTimeWindow(audio, WINDOW_TIME, SR)
             window_audio = ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
             shifted_audio = apply_random_start_shift(window_audio, is_first=(idx == 0))
@@ -208,16 +210,14 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
         print(f"[Worker] Binaural mix error sample {sample_id}: {e}")
         return {}
 
-    # Ambient addition (direct)
+    # Ambient addition
     try:
         b_len = binaural.shape[1]
-        # Generate ambient window matching binaural duration
         ambient = get_random_ambient_window(window_time=b_len / SR, sr=SR)
         ambient = _match_length(ambient, b_len).astype(np.float32)
         if np.any(ambient):
             noise_db = -myRand.pick_random_from_range(25, 46)  # -25..-45
             ambient = scale_to_rms_db(ambient, noise_db)
-            # Add (broadcast manually)
             binaural[0, :] += ambient
             binaural[1, :] += ambient
     except Exception as e:
@@ -242,35 +242,83 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
 
 
 # ---------------------------
-# Multiprocessing wrapper
+# Multiprocessing helpers
 # ---------------------------
 def _init_worker(seed_base: int):
-    # Reseed RNG per process for full randomness
     np.random.seed(seed_base + os.getpid())
 
 
+# ---------------------------
+# NEW: incremental CSV flush logic inside create_dataset
+# ---------------------------
 def create_dataset(
     dataset_size: int = 1000,
     output_dir: str = "output/dataset_parallel",
     parallel: bool = True,
     processes: int = None,
-    chunk_size: int = 50,
+    chunk_size: int = 1,
+    flush_every: int = 1000,  # >>> ADDED
+    resume: bool = False,  # >>> ADDED (optional resume)
 ):
     os.makedirs(output_dir, exist_ok=True)
 
-    # Validate CSVs exist
+    csv_path = os.path.join(output_dir, "dataset_metadata.csv")
+
+    # Resume logic
+    total_written = 0
+    if resume and os.path.exists(csv_path):
+        try:
+            # Fast line count (excluding header)
+            with open(csv_path, "r", encoding="utf-8") as f:
+                total_written = sum(1 for _ in f) - 1
+            print(f"Resuming: detected {total_written} existing rows in metadata CSV.")
+        except Exception:
+            total_written = 0
+    else:
+        if os.path.exists(csv_path):
+            os.remove(csv_path)
+
+    # Validate CSV resources
     missing = [k for k, (d, c) in CLASS_CSV_MAP.items() if not os.path.exists(c)]
     if missing:
         print(f"Warning: Missing CSVs for: {missing}. They will never appear.")
     ensure_ambient_csv()
 
-    indices = list(range(dataset_size))
-    metadata_records = []
+    indices = list(range(total_written, dataset_size))  # skip already done if resuming
+    buffer: List[Dict] = []
+
+    def flush_buffer(final=False):
+        nonlocal buffer, total_written
+        if not buffer:
+            return
+        df = pd.DataFrame(buffer)
+        write_header = total_written == 0 and not (resume and os.path.exists(csv_path))
+        df.to_csv(
+            csv_path,
+            mode="a",
+            header=write_header,
+            index=False,
+        )
+        total_written += len(buffer)
+        print(
+            f"Flushed {len(buffer)} records to CSV "
+            f"(total written: {total_written}/{dataset_size})"
+        )
+        buffer = []
+        if final:
+            print("Final flush complete.")
+
+    if not indices:
+        print("Nothing to do (all samples already generated).")
+        return
 
     if parallel:
         if processes is None:
             processes = max(1, mp.cpu_count() - 1)
-        print(f"Starting multiprocessing with {processes} processes...")
+        print(
+            f"Starting multiprocessing with {processes} processes "
+            f"(resume={resume}, starting at {total_written})..."
+        )
 
         from functools import partial
 
@@ -283,36 +331,48 @@ def create_dataset(
         ) as pool:
             for md in pool.imap_unordered(worker_fn, indices, chunksize=chunk_size):
                 if md:
-                    metadata_records.append(md)
-                    # Optional progress logging
-                    if len(metadata_records) % 100 == 0:
-                        print(
-                            f"Progress: {len(metadata_records)}/{dataset_size} samples done"
-                        )
+                    buffer.append(md)
+                    if len(buffer) >= flush_every:
+                        flush_buffer()
+                # Optional progress print
+                if (total_written + len(buffer)) % 100 == 0:
+                    print(
+                        f"Progress: {total_written + len(buffer)}/{dataset_size} (in-memory buffer size={len(buffer)})"
+                    )
     else:
         for sid in indices:
             md = generate_single(sid, output_dir)
             if md:
-                metadata_records.append(md)
+                buffer.append(md)
             if (sid + 1) % 100 == 0:
-                print(f"Progress: {sid + 1}/{dataset_size}")
+                print(f"Progress: {sid + 1}/{dataset_size} (buffer size={len(buffer)})")
+            if len(buffer) >= flush_every:
+                flush_buffer()
 
-    if metadata_records:
-        df = pd.DataFrame(metadata_records)
-        csv_path = os.path.join(output_dir, "dataset_metadata.csv")
-        df.to_csv(csv_path, index=False)
-        print(f"Done. {len(df)} samples written. Metadata at {csv_path}")
-        print(f"Avg classes per sample: {df['num_classes'].mean():.2f}")
-    else:
-        print("No samples generated successfully.")
+    # Final flush
+    flush_buffer(final=True)
+
+    # Compute stats (read entire CSV once)
+    if os.path.exists(csv_path):
+        try:
+            full_df = pd.read_csv(csv_path)
+            if not full_df.empty:
+                print(f"Metadata at: {csv_path}")
+                print(
+                    f"Total rows: {len(full_df)} | Avg classes/sample: {full_df['num_classes'].mean():.2f}"
+                )
+        except Exception as e:
+            print(f"Could not compute final stats: {e}")
 
 
 if __name__ == "__main__":
     np.random.seed(1234)
     create_dataset(
-        dataset_size=100,
+        dataset_size=1000,
         output_dir="output/dataset_parallel",
         parallel=True,
         processes=None,
-        chunk_size=64,
+        chunk_size=1,
+        flush_every=100,  # every 1000 samples flush to CSV
+        resume=False,  # set True if you want to continue a previous run
     )
