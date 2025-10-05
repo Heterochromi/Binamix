@@ -9,12 +9,13 @@ from typing import Dict, List, Tuple
 from binamix.sadie_utilities import TrackObject, mix_tracks_binaural
 import myRand
 from randManipulateAudio import getRandomTimeWindow, randomlyShiftAudioStartTime
+from utils import azel_to_cartesian
 
 # ---------------------------
 # Configuration
 # ---------------------------
 SR = 44100
-WINDOW_TIME = 0.04
+WINDOW_TIME = 1
 TARGET_LEN_SAMPLES = int(WINDOW_TIME * SR)
 MAX_CLIPS_PER_SAMPLE = 4
 
@@ -130,7 +131,7 @@ def apply_random_start_shift(window_audio: np.ndarray, is_first: bool) -> np.nda
     if is_first:
         return ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
     shifted = randomlyShiftAudioStartTime(
-        window_audio, minShiftBy=0.001, maxShiftBy=0.035, total_time=WINDOW_TIME, sr=SR
+        window_audio, minShiftBy=0.001, maxShiftBy=0.5, total_time=WINDOW_TIME, sr=SR
     )
     return ensure_length_exact(shifted, TARGET_LEN_SAMPLES)
 
@@ -161,8 +162,9 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
 
     tracks = []
     class_list = []
-    az_list = []
-    el_list = []
+    x_list = []
+    y_list = []
+    z_list = []
 
     for idx in range(num_clips):
         try:
@@ -174,7 +176,7 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
             window_audio = ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
             shifted_audio = apply_random_start_shift(window_audio, is_first=(idx == 0))
 
-            azimuth = myRand.pick_random_from_range(0, 360)
+            azimuth = myRand.pick_random_from_range(-180, 180)
             elevation = myRand.pick_random_from_range(-80, 81)
             level = np.random.uniform(0.6, 1.0)
 
@@ -186,10 +188,15 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
                 reverb=0,
                 audio=shifted_audio,
             )
+            coords = azel_to_cartesian(azimuth, elevation)
+            x = coords[0]
+            y = coords[1]
+            z = coords[2]
             tracks.append(track)
             class_list.append(class_name)
-            az_list.append(azimuth)
-            el_list.append(elevation)
+            x_list.append(x)
+            y_list.append(y)
+            z_list.append(z)
         except Exception as e:
             print(f"[Worker] Error clip {idx} sample {sample_id}: {e}")
             continue
@@ -235,8 +242,9 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
     return {
         "name_file": fname,
         "classes": ",".join(class_list),
-        "azimuth": ",".join(map(str, az_list)),
-        "elevation": ",".join(map(str, el_list)),
+        "x": ",".join(map(str, x_list)),
+        "y": ",".join(map(str, y_list)),
+        "z": ",".join(map(str, z_list)),
         "num_classes": len(class_list),
     }
 
@@ -368,11 +376,11 @@ def create_dataset(
 if __name__ == "__main__":
     np.random.seed(1234)
     create_dataset(
-        dataset_size=1000,
+        dataset_size=20,
         output_dir="output/dataset_parallel",
         parallel=True,
         processes=None,
         chunk_size=1,
-        flush_every=100,  # every 1000 samples flush to CSV
+        flush_every=10,  # every 1000 samples flush to CSV
         resume=False,  # set True if you want to continue a previous run
     )
