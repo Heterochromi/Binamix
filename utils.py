@@ -60,3 +60,60 @@ def azel_to_cartesian(
     z = np.round(z, 3)
 
     return np.stack((x, y, z), axis=-1)
+
+
+def cartesian_to_azel(xyz, degrees=True, az_from="x", clockwise=False):
+    """
+    Convert Cartesian coordinates (x, y, z) to azimuth/elevation.
+
+    Conventions match `azel_to_cartesian`:
+      - elevation: angle from the XZ-plane toward +Y (up) (horizon=0, zenith=+90°)
+      - azimuth reference/direction configurable via az_from and clockwise
+      - base convention for azimuth: measured from +X, increasing CCW toward +Z
+
+    Args:
+        xyz: array-like of shape (..., 3) with components [x, y, z]
+        degrees: if True, return az/el in degrees; else radians
+        az_from: "x"/"east" or "y"/"north"
+        clockwise: True for clockwise azimuth increase, False for counterclockwise
+
+    Returns:
+        ndarray[..., 2] with components [azimuth, elevation]
+    """
+    v = np.asarray(xyz, dtype=float)
+    if v.shape[-1] != 3:
+        raise ValueError("xyz must have shape (..., 3)")
+
+    x = v[..., 0]
+    y = v[..., 1]
+    z = v[..., 2]
+
+    # Elevation from XZ-plane toward +Y using atan2 for stability
+    el = np.arctan2(y, np.hypot(x, z))
+
+    # Base azimuth measured from +X, increasing CCW toward +Z
+    base_az = np.arctan2(z, x)
+
+    # Map from base convention to requested az_from/clockwise
+    ref = str(az_from).lower()
+    if ref in ("x", "+x", "east", "e"):
+        az = -base_az if clockwise else base_az
+    elif ref in ("y", "+y", "north", "n"):
+        az = (np.pi / 2 - base_az) if clockwise else (base_az - np.pi / 2)
+    else:
+        raise ValueError("az_from must be 'x'/'east' or 'y'/'north'")
+
+    if degrees:
+        az = np.rad2deg(az)
+        el = np.rad2deg(el)
+
+    # Round outputs to 3 decimal places
+    az = np.round(az, 3)
+    el = np.round(el, 3)
+
+    return np.stack((az, el), axis=-1)
+
+
+
+if __name__ == "__main__":
+   print(azel_to_cartesian(192 , 37 , az_from="north"))
