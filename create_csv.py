@@ -15,7 +15,16 @@ def get_audio_files_by_directory(directory):
     Recursively find all audio files in the given directory.
     Returns a dictionary: {class_name: [(filename, full_path), ...]}
     """
-    audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.aac', '.wma', '.opus'}
+    audio_extensions = {
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".m4a",
+        ".aac",
+        ".wma",
+        ".opus",
+    }
     files_by_class = {}
 
     directory_path = Path(directory)
@@ -52,11 +61,11 @@ def create_csv_for_class(class_name, files_data, output_dir):
     """
     output_file = Path(output_dir) / f"{class_name}.csv"
 
-    with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
 
         # Write header
-        writer.writerow(['name', 'class'])
+        writer.writerow(["name", "class"])
 
         # Write data rows
         for filename, full_path in files_data:
@@ -67,21 +76,20 @@ def create_csv_for_class(class_name, files_data, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Create separate CSV files for each directory containing audio files'
+        description="Create separate CSV files for each directory containing audio files"
     )
     parser.add_argument(
-        'directory',
-        help='Path to the directory containing subdirectories with audio files'
+        "directory",
+        help="Path to the directory containing subdirectories with audio files",
     )
     parser.add_argument(
-        '-o', '--output-dir',
-        default='.',
-        help='Output directory for CSV files (default: current directory)'
+        "-o",
+        "--output-dir",
+        default=".",
+        help="Output directory for CSV files (default: current directory)",
     )
     parser.add_argument(
-        '--show-stats',
-        action='store_true',
-        help='Show statistics about classes found'
+        "--show-stats", action="store_true", help="Show statistics about classes found"
     )
 
     args = parser.parse_args()
@@ -103,7 +111,9 @@ def main():
 
         # Create a CSV file for each class
         for class_name, files_data in files_by_class.items():
-            csv_file, file_count = create_csv_for_class(class_name, files_data, output_dir)
+            csv_file, file_count = create_csv_for_class(
+                class_name, files_data, output_dir
+            )
             csv_files_created.append(csv_file)
             total_files += file_count
             print(f"Created: {csv_file} ({file_count} files)")

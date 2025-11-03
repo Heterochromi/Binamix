@@ -25,7 +25,6 @@ CLASS_CSV_MAP = {
     "footsteps": ("cs2 sounds/footsteps", "csv_output/footsteps.csv"),
     "flashbang": ("cs2 sounds/grenade/flashbang", "csv_output/flashbang.csv"),
     "hegrenade": ("cs2 sounds/grenade/hegrenade", "csv_output/hegrenade.csv"),
-    "incgrenade": ("cs2 sounds/grenade/incgrenade", "csv_output/incgrenade.csv"),
     "molotov": ("cs2 sounds/grenade/molotov", "csv_output/molotov.csv"),
     "smokegrenade": ("cs2 sounds/grenade/smokegrenade", "csv_output/smokegrenade.csv"),
     "weapons": ("cs2 sounds/weapons", "csv_output/weapons.csv"),
@@ -131,7 +130,7 @@ def apply_random_start_shift(window_audio: np.ndarray, is_first: bool) -> np.nda
     if is_first:
         return ensure_length_exact(window_audio, TARGET_LEN_SAMPLES)
     shifted = randomlyShiftAudioStartTime(
-        window_audio, minShiftBy=0.001, maxShiftBy=0.95, total_time=WINDOW_TIME, sr=SR
+        window_audio, minShiftBy=0.001, maxShiftBy=0.07, total_time=WINDOW_TIME, sr=SR
     )
     return ensure_length_exact(shifted, TARGET_LEN_SAMPLES)
 
@@ -157,8 +156,9 @@ def _match_length(arr: np.ndarray, target_len: int) -> np.ndarray:
 # Core single-sample generation
 # ---------------------------
 def generate_single(sample_id: int, output_dir: str) -> Dict:
-    num_clips = np.random.randint(1, MAX_CLIPS_PER_SAMPLE + 1)
     class_keys = list(CLASS_CSV_MAP.keys())
+    target_clips = np.random.randint(1, min(MAX_CLIPS_PER_SAMPLE, len(class_keys)) + 1)
+    selected_keys = list(np.random.choice(class_keys, size=target_clips, replace=False))
 
     tracks = []
     class_list = []
@@ -166,9 +166,8 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
     y_list = []
     z_list = []
 
-    for idx in range(num_clips):
+    for idx, class_key in enumerate(selected_keys):
         try:
-            class_key = np.random.choice(class_keys)
             audio, sr, class_name = get_random_clip_from_class(class_key)
 
             # Extract window
@@ -188,7 +187,7 @@ def generate_single(sample_id: int, output_dir: str) -> Dict:
                 reverb=0,
                 audio=shifted_audio,
             )
-            coords = azel_to_cartesian(azimuth, elevation , az_from="north")
+            coords = azel_to_cartesian(azimuth, elevation, az_from="north")
             x = coords[0]
             y = coords[1]
             z = coords[2]
@@ -376,11 +375,11 @@ def create_dataset(
 if __name__ == "__main__":
     np.random.seed(2003)
     create_dataset(
-        dataset_size=100000,
+        dataset_size=100,
         output_dir="output/dataset_parallel",
         parallel=True,
         processes=None,
         chunk_size=1,
-        flush_every=1000,
+        flush_every=50,
         resume=False,  # set True if you want to continue a previous run
     )

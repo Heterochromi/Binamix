@@ -7,7 +7,9 @@ from typing import List, Optional, Sequence, Tuple
 import math
 
 
-def _compute_silence_threshold(audio: AudioSegment, silence_thresh: Optional[float]) -> float:
+def _compute_silence_threshold(
+    audio: AudioSegment, silence_thresh: Optional[float]
+) -> float:
     """Return an absolute dBFS silence threshold.
 
     If ``silence_thresh`` is None, estimate a robust threshold that preserves
@@ -27,7 +29,7 @@ def _compute_silence_threshold(audio: AudioSegment, silence_thresh: Optional[flo
     # Windowed RMS dBFS to estimate noise floor and peak more robustly than
     # using the global average. Keep dependencies minimal (no numpy).
     window_ms = 50  # analysis window
-    hop_ms = 25     # hop size
+    hop_ms = 25  # hop size
 
     samples = audio.get_array_of_samples()
     if not samples:
@@ -51,7 +53,7 @@ def _compute_silence_threshold(audio: AudioSegment, silence_thresh: Optional[flo
         # Note: samples are interleaved by channel already
         # Compute RMS directly on interleaved data which approximates mono RMS
         acc = 0.0
-        for s in samples[idx:idx + win]:
+        for s in samples[idx : idx + win]:
             acc += float(s) * float(s)
         mean_sq = acc / win
         if mean_sq <= 0.0 or max_possible <= 0.0:
@@ -273,8 +275,16 @@ def trim_directory_inplace(
         print(f"Done. Processed {processed} files under '{root_dir}'.")
 
 
-
-
 if __name__ == "__main__":
     # trim_silence_file(input_path="cs2 sounds/grenade/flashbang/flashbang_explode1.wav" , min_silence_len=1, trim_leading=False , trim_trailing=True , keep_silence=0 , silence_thresh=-25 , output_path="outputs")
-    trim_directory_inplace(root_dir="cs2 sounds/classifiables" , extensions=(".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac") , min_silence_len=1 , silence_thresh=-25 , keep_silence=0 , remove_interior=False , trim_leading=False , trim_trailing=True , show_progress=True)
+    trim_directory_inplace(
+        root_dir="cs2 sounds/classifiables",
+        extensions=(".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"),
+        min_silence_len=1,
+        silence_thresh=-20,
+        keep_silence=0,
+        remove_interior=True,
+        trim_leading=False,
+        trim_trailing=False,
+        show_progress=True,
+    )
