@@ -5,8 +5,7 @@ import pandas as pd
 import librosa
 
 
-
-def getRandomClip(directory : str , csv : str):
+def getRandomClip(directory: str, csv: str):
     """
     Get a random clip from a directory of audio files
 
@@ -19,14 +18,13 @@ def getRandomClip(directory : str , csv : str):
     """
     df = pd.read_csv(csv)
     random_index = np.random.choice(df.index)
-    audio_path = os.path.join(directory, df.loc[random_index, 'name'])
-    class_name = df.loc[random_index, 'class']
-    audio , sr = librosa.load(audio_path)
-    return audio , sr ,class_name
+    audio_path = os.path.join(directory, df.loc[random_index, "name"])
+    class_name = df.loc[random_index, "class"]
+    audio, sr = librosa.load(audio_path)
+    return audio, sr, class_name
 
 
-
-def getRandomTimeWindow(audio, time : float , sr : int | float):
+def getRandomTimeWindow(audio, time: float, sr: int | float):
     """
     Pick a random window time frame within an audio file
 
@@ -46,8 +44,7 @@ def getRandomTimeWindow(audio, time : float , sr : int | float):
         return audio
 
     # Calculate the maximum starting position
-    max_start = audio_total_length - target_len
-
+    max_start = int(audio_total_length * 0.8) - target_len
     # Get a random starting position
     start_pos = np.random.randint(0, max_start)
 
@@ -55,7 +52,10 @@ def getRandomTimeWindow(audio, time : float , sr : int | float):
     end_pos = start_pos + target_len
     return audio[start_pos:end_pos]
 
-def randomlyShiftAudioStartTime(audio, minShiftBy : float , maxShiftBy : float , total_time : float, sr : int | float):
+
+def randomlyShiftAudioStartTime(
+    audio, minShiftBy: float, maxShiftBy: float, total_time: float, sr: int | float
+):
     """
     Randomly shift the start time of an audio clip
 
@@ -79,7 +79,9 @@ def randomlyShiftAudioStartTime(audio, minShiftBy : float , maxShiftBy : float ,
     shift_samples = np.random.randint(min_shift_samples, max_shift_samples + 1)
 
     # Create a new array filled with zeros (silence) of the target length
-    shifted_audio = np.zeros(target_len, dtype=audio.dtype if hasattr(audio, 'dtype') else np.float32)
+    shifted_audio = np.zeros(
+        target_len, dtype=audio.dtype if hasattr(audio, "dtype") else np.float32
+    )
 
     # Calculate how much of the original audio we can fit after the shift
     available_space = target_len - shift_samples
@@ -87,19 +89,23 @@ def randomlyShiftAudioStartTime(audio, minShiftBy : float , maxShiftBy : float ,
 
     # Copy the original audio starting at the shift position
     if audio_to_copy > 0:
-        shifted_audio[shift_samples:shift_samples + audio_to_copy] = audio[:audio_to_copy]
+        shifted_audio[shift_samples : shift_samples + audio_to_copy] = audio[
+            :audio_to_copy
+        ]
 
     return shifted_audio
-
-
 
 
 if __name__ == "__main__":
     import soundfile as sf
 
     for i in range(3):
-        audio,sr,class_name = getRandomClip("cs2 sounds/classifiables" , "cs2 sounds/classifiables.csv")
-        audio_random_window = getRandomTimeWindow(audio,0.04,sr)
-        shifted_audio = randomlyShiftAudioStartTime(audio_random_window, 0.01, 0.035, 0.04, sr)
+        audio, sr, class_name = getRandomClip(
+            "cs2 sounds/classifiables", "cs2 sounds/classifiables.csv"
+        )
+        audio_random_window = getRandomTimeWindow(audio, 0.04, sr)
+        shifted_audio = randomlyShiftAudioStartTime(
+            audio_random_window, 0.01, 0.035, 0.04, sr
+        )
         sf.write(f"output_{i}_shifted.wav", shifted_audio, sr)
         sf.write(f"output_{i}.wav", audio_random_window, sr)

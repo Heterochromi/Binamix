@@ -278,10 +278,10 @@ def trim_directory_inplace(
 if __name__ == "__main__":
     # trim_silence_file(input_path="cs2 sounds/grenade/flashbang/flashbang_explode1.wav" , min_silence_len=1, trim_leading=False , trim_trailing=True , keep_silence=0 , silence_thresh=-25 , output_path="outputs")
     trim_directory_inplace(
-        root_dir="cs2 sounds/classifiables",
+        root_dir="cs2 sounds/doors",
         extensions=(".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"),
         min_silence_len=1,
-        silence_thresh=-20,
+        silence_thresh=-35,
         keep_silence=0,
         remove_interior=True,
         trim_leading=False,

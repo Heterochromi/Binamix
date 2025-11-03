@@ -33,6 +33,18 @@ CLASS_CSV_MAP = {
 AMBIENT_DIR = "cs2 sounds/ambient"
 AMBIENT_CSV = "csv_output/ambient.csv"
 
+# Class weights for sampling (higher = more likely to be selected)
+# Adjust these values to control selection probability
+CLASS_WEIGHTS = {
+    "doors": 1.0,
+    "footsteps": 4.0,  # 2x more likely than doors
+    "flashbang": 1.0,
+    "hegrenade": 1.0,
+    "molotov": 1.0,
+    "smokegrenade": 1.0,
+    "weapons": 2,  # 1.5x more likely than doors
+}
+
 
 # ---------------------------
 # CSV / metadata caching
@@ -59,9 +71,7 @@ def get_random_clip_from_class(class_key: str) -> Tuple[np.ndarray, int, str]:
         audio = np.mean(audio, axis=1)
     if sr != SR:
         # Faster resample option via librosa with kaiser_fast
-        audio = librosa.resample(
-            audio, orig_sr=sr, target_sr=SR, res_type="kaiser_fast"
-        )
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=SR)
         sr = SR
     return audio, sr, row["class"]
 
@@ -107,7 +117,9 @@ def get_random_ambient_window(
         audio = np.mean(audio, axis=1)
     if file_sr != sr:
         audio = librosa.resample(
-            audio, orig_sr=file_sr, target_sr=sr, res_type="kaiser_fast"
+            audio,
+            orig_sr=file_sr,
+            target_sr=sr,
         )
     window = getRandomTimeWindow(audio, window_time, sr)
     if len(window) < int(window_time * sr):
@@ -158,7 +170,13 @@ def _match_length(arr: np.ndarray, target_len: int) -> np.ndarray:
 def generate_single(sample_id: int, output_dir: str) -> Dict:
     class_keys = list(CLASS_CSV_MAP.keys())
     target_clips = np.random.randint(1, min(MAX_CLIPS_PER_SAMPLE, len(class_keys)) + 1)
-    selected_keys = list(np.random.choice(class_keys, size=target_clips, replace=False))
+
+    # Apply class weights for selection
+    weights = np.array([CLASS_WEIGHTS.get(k, 1.0) for k in class_keys])
+    weights = weights / weights.sum()  # Normalize to probabilities
+    selected_keys = list(
+        np.random.choice(class_keys, size=target_clips, replace=False, p=weights)
+    )
 
     tracks = []
     class_list = []
@@ -375,7 +393,7 @@ def create_dataset(
 if __name__ == "__main__":
     np.random.seed(2003)
     create_dataset(
-        dataset_size=100,
+        dataset_size=50,
         output_dir="output/dataset_parallel",
         parallel=True,
         processes=None,
